@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+import {
+  apiRegister, apiLogin, apiLogout, apiMe,
+  apiFriendsSearch, apiFriendsAdd, apiFriendsList, apiFriendAccept
+} from "@/api";
 
 type Section = "chats" | "contacts" | "channels" | "groups" | "media" | "search" | "profile" | "settings";
 
@@ -63,6 +67,246 @@ const mockMedia = [
   { id: 9, url: "https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7?w=300&h=300&fit=crop" },
 ];
 
+const GRADIENTS = ["avatar-gradient-1", "avatar-gradient-2", "avatar-gradient-3", "avatar-gradient-4", "avatar-gradient-5"];
+
+type AuthUser = { id: number; username: string; display_name: string; avatar_gradient: number; bio: string };
+type FriendUser = { id: number; username: string; display_name: string; avatar_gradient: number; friendship_status?: string | null; online?: boolean };
+
+// Экран авторизации
+function AuthScreen({ onAuth }: { onAuth: (user: AuthUser, token: string) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = mode === "login"
+        ? await apiLogin(username, password)
+        : await apiRegister(username, displayName, password);
+      if (res.error) { setError(res.error); return; }
+      localStorage.setItem("yg_token", res.token);
+      onAuth(res.user, res.token);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen w-screen flex items-center justify-center bg-background font-golos">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-15" style={{ background: "radial-gradient(circle, hsl(263 90% 65%), transparent)" }} />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full opacity-10" style={{ background: "radial-gradient(circle, hsl(185 90% 50%), transparent)" }} />
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm mx-4 animate-fade-in">
+        {/* Лого */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl font-black text-white shadow-2xl glow-purple mb-4 animate-float" style={{ background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(185 90% 50%))" }}>
+            Я
+          </div>
+          <h1 className="text-2xl font-black text-foreground">Яримплиграмм</h1>
+          <p className="text-sm text-muted-foreground mt-1">Мессенджер с шифрованием</p>
+        </div>
+
+        {/* Карточка */}
+        <div className="bg-[hsl(var(--yg-surface))] border border-border rounded-3xl p-6 shadow-2xl">
+          {/* Переключатель */}
+          <div className="flex bg-[hsl(var(--yg-surface3))] rounded-2xl p-1 mb-6">
+            {(["login", "register"] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setError(""); }}
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all duration-200 ${mode === m ? "text-white shadow-lg" : "text-muted-foreground hover:text-foreground"}`}
+                style={mode === m ? { background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(285 80% 55%))" } : {}}
+              >
+                {m === "login" ? "Вход" : "Регистрация"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {mode === "register" && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Имя и фамилия</label>
+                <input
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="Иван Иванов"
+                  className="w-full px-4 py-3 rounded-xl bg-[hsl(var(--yg-surface3))] text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-violet-500/50 transition-all"
+                />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Юзернейм</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
+                <input
+                  value={username}
+                  onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="username"
+                  className="w-full pl-7 pr-4 py-3 rounded-xl bg-[hsl(var(--yg-surface3))] text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-violet-500/50 transition-all"
+                  onKeyDown={e => e.key === "Enter" && submit()}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Пароль</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-xl bg-[hsl(var(--yg-surface3))] text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-violet-500/50 transition-all"
+                onKeyDown={e => e.key === "Enter" && submit()}
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400 animate-fade-in">
+                <Icon name="AlertCircle" size={14} />
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              disabled={loading || !username || !password || (mode === "register" && !displayName)}
+              className="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all duration-200 hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100 mt-1"
+              style={{ background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(285 80% 55%))" }}
+            >
+              {loading ? "Загрузка..." : mode === "login" ? "Войти" : "Создать аккаунт"}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 mt-4 px-2 py-2 rounded-xl bg-emerald-500/8 text-xs text-emerald-400/80">
+            <Icon name="ShieldCheck" size={12} />
+            Данные защищены сквозным шифрованием
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Модальное окно добавления друга
+function AddFriendModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<FriendUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [addingId, setAddingId] = useState<number | null>(null);
+  const [message, setMessage] = useState("");
+
+  const search = useCallback(async (q: string) => {
+    if (q.length < 2) { setResults([]); return; }
+    setLoading(true);
+    const res = await apiFriendsSearch(q);
+    setResults(res.users || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => search(query), 400);
+    return () => clearTimeout(t);
+  }, [query, search]);
+
+  const addFriend = async (username: string, id: number) => {
+    setAddingId(id);
+    const res = await apiFriendsAdd(username);
+    setAddingId(null);
+    if (res.ok) {
+      setMessage(`Запрос отправлен @${username}!`);
+      setResults(prev => prev.map(u => u.id === id ? { ...u, friendship_status: "pending" } : u));
+      onAdded();
+    } else {
+      setMessage(res.error || "Ошибка");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative z-10 w-full max-w-md bg-[hsl(var(--yg-surface))] border border-border rounded-3xl p-6 shadow-2xl animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Добавить друга</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Найдите пользователя по юзернейму</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl hover:bg-white/8 transition-colors flex items-center justify-center text-muted-foreground">
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+
+        <div className="relative mb-4">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+            placeholder="введите юзернейм..."
+            className="w-full pl-7 pr-4 py-3 rounded-xl bg-[hsl(var(--yg-surface3))] text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-violet-500/50 transition-all"
+          />
+          {loading && <Icon name="Loader" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />}
+        </div>
+
+        {message && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400 mb-3 animate-fade-in">
+            <Icon name="CheckCircle" size={14} />
+            {message}
+          </div>
+        )}
+
+        {results.length > 0 && (
+          <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+            {results.map(u => (
+              <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors">
+                <div className={`w-10 h-10 ${GRADIENTS[(u.avatar_gradient - 1) % GRADIENTS.length]} rounded-xl flex items-center justify-center font-bold text-white text-sm flex-shrink-0`}>
+                  {u.display_name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-foreground">{u.display_name}</div>
+                  <div className="text-xs text-violet-400">@{u.username}</div>
+                </div>
+                {u.friendship_status === "pending" ? (
+                  <span className="text-xs text-muted-foreground px-2 py-1 rounded-lg bg-white/5">Отправлено</span>
+                ) : u.friendship_status === "accepted" ? (
+                  <span className="text-xs text-emerald-400 px-2 py-1 rounded-lg bg-emerald-500/10">Друг</span>
+                ) : (
+                  <button
+                    onClick={() => addFriend(u.username, u.id)}
+                    disabled={addingId === u.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition-all hover:scale-105 disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(285 80% 55%))" }}
+                  >
+                    <Icon name="UserPlus" size={12} />
+                    {addingId === u.id ? "..." : "Добавить"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {query.length >= 2 && !loading && results.length === 0 && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            Пользователь @{query} не найден
+          </div>
+        )}
+
+        {query.length < 2 && (
+          <div className="text-center py-4 text-xs text-muted-foreground">
+            Введите минимум 2 символа для поиска
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Avatar({ gradient, name, size = "md" }: { gradient: string; name: string; size?: "sm" | "md" | "lg" }) {
   const sizes = { sm: "w-9 h-9 text-sm", md: "w-12 h-12 text-base", lg: "w-16 h-16 text-xl" };
   return (
@@ -103,6 +347,12 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 }
 
 export default function Index() {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAddFriend, setShowAddFriend] = useState(false);
+  const [friends, setFriends] = useState<FriendUser[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<FriendUser[]>([]);
+
   const [activeSection, setActiveSection] = useState<Section>("chats");
   const [activeChat, setActiveChat] = useState<number | null>(1);
   const [messageInput, setMessageInput] = useState("");
@@ -111,6 +361,43 @@ export default function Index() {
   const [e2eEnabled, setE2eEnabled] = useState(true);
   const [notifs, setNotifs] = useState(true);
   const [twoFactor, setTwoFactor] = useState(false);
+
+  // Загружаем пользователя по токену при старте
+  useEffect(() => {
+    const token = localStorage.getItem("yg_token");
+    if (!token) { setAuthLoading(false); return; }
+    apiMe().then(res => {
+      if (res.user) setCurrentUser(res.user);
+      setAuthLoading(false);
+    }).catch(() => setAuthLoading(false));
+  }, []);
+
+  // Загружаем список друзей
+  const loadFriends = useCallback(async () => {
+    const res = await apiFriendsList();
+    if (res.friends) setFriends(res.friends);
+    if (res.pending_requests) setPendingRequests(res.pending_requests);
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) loadFriends();
+  }, [currentUser, loadFriends]);
+
+  const handleAuth = (user: AuthUser) => {
+    setCurrentUser(user);
+  };
+
+  const handleLogout = async () => {
+    await apiLogout();
+    setCurrentUser(null);
+    setFriends([]);
+    setPendingRequests([]);
+  };
+
+  const acceptFriend = async (userId: number) => {
+    await apiFriendAccept(userId);
+    loadFriends();
+  };
 
   const navItems: { id: Section; icon: string; label: string; badge?: number }[] = [
     { id: "chats", icon: "MessageCircle", label: "Чаты", badge: mockChats.reduce((s, c) => s + c.unread, 0) },
@@ -146,7 +433,37 @@ export default function Index() {
   );
   const filteredSearch = allSearch.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  // Загрузка
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-screen flex items-center justify-center bg-background font-golos">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black text-white animate-float" style={{ background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(185 90% 50%))" }}>Я</div>
+          <div className="flex gap-1">
+            <div className="w-2 h-2 rounded-full bg-violet-400 typing-dot" />
+            <div className="w-2 h-2 rounded-full bg-violet-400 typing-dot" />
+            <div className="w-2 h-2 rounded-full bg-violet-400 typing-dot" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Не авторизован
+  if (!currentUser) {
+    return <AuthScreen onAuth={handleAuth} />;
+  }
+
+  const myGradient = GRADIENTS[(currentUser.avatar_gradient - 1) % GRADIENTS.length];
+
   return (
+    <>
+    {showAddFriend && (
+      <AddFriendModal
+        onClose={() => setShowAddFriend(false)}
+        onAdded={loadFriends}
+      />
+    )}
     <div className="flex h-screen w-screen overflow-hidden bg-background font-golos">
       {/* Фон с блобами */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -185,9 +502,9 @@ export default function Index() {
           ))}
         </div>
 
-        <button onClick={() => setActiveSection("profile")} className="mt-2">
-          <div className="w-10 h-10 avatar-gradient-5 rounded-2xl flex items-center justify-center font-bold text-white text-sm shadow-lg hover:scale-105 transition-transform">
-            М
+        <button onClick={() => setActiveSection("profile")} className="mt-2 group relative">
+          <div className={`w-10 h-10 ${myGradient} rounded-2xl flex items-center justify-center font-bold text-white text-sm shadow-lg hover:scale-105 transition-transform`}>
+            {currentUser.display_name.charAt(0)}
           </div>
         </button>
       </nav>
@@ -206,9 +523,13 @@ export default function Index() {
               {activeSection === "profile" && "Профиль"}
               {activeSection === "settings" && "Настройки"}
             </h1>
-            {activeSection === "chats" && (
-              <button className="w-8 h-8 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 transition-colors flex items-center justify-center text-violet-400">
-                <Icon name="Plus" size={16} />
+            {(activeSection === "chats" || activeSection === "contacts") && (
+              <button
+                onClick={() => setShowAddFriend(true)}
+                className="w-8 h-8 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 transition-colors flex items-center justify-center text-violet-400"
+                title="Добавить друга"
+              >
+                <Icon name={activeSection === "contacts" ? "UserPlus" : "Plus"} size={16} />
               </button>
             )}
           </div>
@@ -266,38 +587,95 @@ export default function Index() {
             </div>
           )}
 
-          {/* КОНТАКТЫ */}
+          {/* КОНТАКТЫ — реальные друзья */}
           {activeSection === "contacts" && (
             <div className="flex flex-col gap-0.5">
-              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">В сети</div>
-              {mockContacts.filter(c => c.online).map((c, i) => (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-                  <div className="relative">
-                    <Avatar gradient={c.gradient} name={c.name} size="md" />
-                    <OnlineBadge />
+              {pendingRequests.length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-[10px] font-semibold text-orange-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Icon name="Bell" size={10} /> Запросы в друзья ({pendingRequests.length})
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-foreground">{c.name}</div>
-                    <div className="text-xs text-violet-400">{c.username}</div>
+                  {pendingRequests.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl bg-orange-500/5 border border-orange-500/15 animate-fade-in">
+                      <div className={`w-10 h-10 ${GRADIENTS[(u.avatar_gradient - 1) % GRADIENTS.length]} rounded-xl flex items-center justify-center font-bold text-white text-sm flex-shrink-0`}>
+                        {u.display_name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-foreground">{u.display_name}</div>
+                        <div className="text-xs text-muted-foreground">@{u.username}</div>
+                      </div>
+                      <button
+                        onClick={() => acceptFriend(u.id)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-white flex-shrink-0"
+                        style={{ background: "linear-gradient(135deg, hsl(145 70% 45%), hsl(185 90% 45%))" }}
+                      >
+                        <Icon name="Check" size={11} /> Принять
+                      </button>
+                    </div>
+                  ))}
+                  <div className="my-2 border-t border-border" />
+                </>
+              )}
+
+              {friends.filter(f => f.online).length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">В сети</div>
+                  {friends.filter(f => f.online).map((f, i) => (
+                    <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
+                      <div className="relative">
+                        <div className={`w-12 h-12 ${GRADIENTS[(f.avatar_gradient - 1) % GRADIENTS.length]} rounded-2xl flex items-center justify-center font-bold text-white flex-shrink-0 shadow-lg`}>
+                          {f.display_name.charAt(0)}
+                        </div>
+                        <OnlineBadge />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-foreground">{f.display_name}</div>
+                        <div className="text-xs text-violet-400">@{f.username}</div>
+                      </div>
+                      <button className="w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center text-violet-400 hover:bg-violet-500/30 transition-colors flex-shrink-0">
+                        <Icon name="MessageCircle" size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {friends.filter(f => !f.online).length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-2">Не в сети</div>
+                  {friends.filter(f => !f.online).map((f, i) => (
+                    <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
+                      <div className={`w-12 h-12 ${GRADIENTS[(f.avatar_gradient - 1) % GRADIENTS.length]} rounded-2xl flex items-center justify-center font-bold text-white flex-shrink-0 shadow-lg`}>
+                        {f.display_name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-foreground">{f.display_name}</div>
+                        <div className="text-xs text-muted-foreground">@{f.username}</div>
+                      </div>
+                      <button className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-white/10 transition-colors flex-shrink-0">
+                        <Icon name="MessageCircle" size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {friends.length === 0 && pendingRequests.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-violet-500/10 flex items-center justify-center">
+                    <Icon name="UserPlus" size={28} className="text-violet-400" />
                   </div>
-                  <button className="w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center text-violet-400 hover:bg-violet-500/30 transition-colors flex-shrink-0">
-                    <Icon name="MessageCircle" size={14} />
+                  <div className="text-sm text-foreground font-medium mb-1">Нет друзей</div>
+                  <div className="text-xs text-muted-foreground mb-4">Добавьте первого друга по юзернейму</div>
+                  <button
+                    onClick={() => setShowAddFriend(true)}
+                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
+                    style={{ background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(285 80% 55%))" }}
+                  >
+                    Найти друга
                   </button>
                 </div>
-              ))}
-              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-3">Не в сети</div>
-              {mockContacts.filter(c => !c.online).map((c, i) => (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer animate-fade-in" style={{ animationDelay: `${(i + 2) * 50}ms` }}>
-                  <Avatar gradient={c.gradient} name={c.name} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-foreground">{c.name}</div>
-                    <div className="text-xs text-muted-foreground">{c.username}</div>
-                  </div>
-                  <button className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-white/10 transition-colors flex-shrink-0">
-                    <Icon name="MessageCircle" size={14} />
-                  </button>
-                </div>
-              ))}
+              )}
             </div>
           )}
 
@@ -388,20 +766,19 @@ export default function Index() {
           {/* ПРОФИЛЬ */}
           {activeSection === "profile" && (
             <div className="flex flex-col items-center pt-4 gap-4 animate-fade-in">
-              <div className="w-20 h-20 avatar-gradient-5 rounded-3xl flex items-center justify-center font-black text-3xl text-white shadow-2xl glow-purple">
-                М
+              <div className={`w-20 h-20 ${myGradient} rounded-3xl flex items-center justify-center font-black text-3xl text-white shadow-2xl glow-purple`}>
+                {currentUser.display_name.charAt(0)}
               </div>
               <div className="text-center">
-                <div className="font-bold text-lg text-foreground">Михаил Яримпли</div>
-                <div className="text-sm text-violet-400">@mikhail_y</div>
-                <div className="text-xs text-muted-foreground mt-1">+7 999 123-45-67</div>
+                <div className="font-bold text-lg text-foreground">{currentUser.display_name}</div>
+                <div className="text-sm text-violet-400">@{currentUser.username}</div>
               </div>
               <div className="w-full space-y-2">
                 {[
                   { icon: "Lock", label: "E2E шифрование", value: "Активно", color: "text-emerald-400" },
                   { icon: "Shield", label: "Защита данных", value: "Высокая", color: "text-violet-400" },
-                  { icon: "MessageCircle", label: "Сообщений", value: "1 234", color: "text-cyan-400" },
-                  { icon: "Users", label: "Контактов", value: "5", color: "text-pink-400" },
+                  { icon: "Users", label: "Друзей", value: String(friends.length), color: "text-pink-400" },
+                  { icon: "Clock", label: "Входящих запросов", value: String(pendingRequests.length), color: "text-orange-400" },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center gap-3 p-3 rounded-xl bg-white/4 hover:bg-white/6 transition-colors cursor-pointer">
                     <div className={`w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center ${item.color}`}>
@@ -412,8 +789,18 @@ export default function Index() {
                   </div>
                 ))}
               </div>
-              <button className="w-full py-2.5 rounded-xl text-sm font-semibold text-foreground hover:bg-white/8 transition-colors border border-border">
-                Редактировать профиль
+              <button
+                onClick={() => setShowAddFriend(true)}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-[1.02]"
+                style={{ background: "linear-gradient(135deg, hsl(263 90% 65%), hsl(285 80% 55%))" }}
+              >
+                Добавить друга
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition-colors border border-red-500/20"
+              >
+                Выйти из аккаунта
               </button>
             </div>
           )}
@@ -612,5 +999,6 @@ export default function Index() {
         )}
       </main>
     </div>
+    </>
   );
 }
