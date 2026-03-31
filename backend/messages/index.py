@@ -60,7 +60,8 @@ def handler(event: dict, context) -> dict:
                      SELECT MAX(id) FROM {SCHEMA}.messages
                      WHERE sender_id = {my_id} AND receiver_id = u.id
                  ), 0)
-                ) AS unread
+                ) AS unread,
+                u.verified
             FROM {SCHEMA}.friendships f
             JOIN {SCHEMA}.users u ON u.id = CASE WHEN f.user_id = {my_id} THEN f.friend_id ELSE f.user_id END
             LEFT JOIN LATERAL (
@@ -85,6 +86,7 @@ def handler(event: dict, context) -> dict:
                 "last_text": r[5] or "",
                 "last_time": r[6].strftime("%H:%M") if r[6] else "",
                 "unread": r[8] or 0,
+                "verified": bool(r[9]),
             })
         return resp(200, {"chats": chats})
 

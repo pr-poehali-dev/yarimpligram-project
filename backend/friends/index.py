@@ -55,7 +55,7 @@ def handler(event: dict, context) -> dict:
         safe_q = q.replace("'", "''")
         cur.execute(f"""
             SELECT u.id, u.username, u.display_name, u.avatar_gradient,
-                   f.status
+                   f.status, u.verified
             FROM {SCHEMA}.users u
             LEFT JOIN {SCHEMA}.friendships f
                 ON (f.user_id = {me_id} AND f.friend_id = u.id) OR (f.friend_id = {me_id} AND f.user_id = u.id)
@@ -64,7 +64,7 @@ def handler(event: dict, context) -> dict:
         """)
         rows = cur.fetchall()
         conn.close()
-        users = [{"id": r[0], "username": r[1], "display_name": r[2], "avatar_gradient": r[3], "friendship_status": r[4]} for r in rows]
+        users = [{"id": r[0], "username": r[1], "display_name": r[2], "avatar_gradient": r[3], "friendship_status": r[4], "verified": bool(r[5])} for r in rows]
         return resp(200, {"users": users})
 
     # POST ?action=add
@@ -110,7 +110,8 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and action == "list":
         cur.execute(f"""
             SELECT u.id, u.username, u.display_name, u.avatar_gradient, f.status,
-                   CASE WHEN u.last_seen > NOW() - INTERVAL '5 minutes' THEN true ELSE false END as online
+                   CASE WHEN u.last_seen > NOW() - INTERVAL '5 minutes' THEN true ELSE false END as online,
+                   u.verified
             FROM {SCHEMA}.friendships f
             JOIN {SCHEMA}.users u ON (
                 CASE WHEN f.user_id = {me_id} THEN f.friend_id ELSE f.user_id END = u.id
@@ -121,7 +122,7 @@ def handler(event: dict, context) -> dict:
         rows = cur.fetchall()
 
         cur.execute(f"""
-            SELECT u.id, u.username, u.display_name, u.avatar_gradient
+            SELECT u.id, u.username, u.display_name, u.avatar_gradient, u.verified
             FROM {SCHEMA}.friendships f
             JOIN {SCHEMA}.users u ON f.user_id = u.id
             WHERE f.friend_id = {me_id} AND f.status = 'pending'
@@ -129,8 +130,8 @@ def handler(event: dict, context) -> dict:
         pending_rows = cur.fetchall()
         conn.close()
 
-        friends = [{"id": r[0], "username": r[1], "display_name": r[2], "avatar_gradient": r[3], "status": r[4], "online": r[5]} for r in rows]
-        pending = [{"id": r[0], "username": r[1], "display_name": r[2], "avatar_gradient": r[3]} for r in pending_rows]
+        friends = [{"id": r[0], "username": r[1], "display_name": r[2], "avatar_gradient": r[3], "status": r[4], "online": r[5], "verified": bool(r[6])} for r in rows]
+        pending = [{"id": r[0], "username": r[1], "display_name": r[2], "avatar_gradient": r[3], "verified": bool(r[4])} for r in pending_rows]
         return resp(200, {"friends": friends, "pending_requests": pending})
 
     conn.close()

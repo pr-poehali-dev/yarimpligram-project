@@ -10,9 +10,9 @@ type Section = "chats" | "contacts" | "profile" | "settings";
 
 const GRADIENTS = ["avatar-gradient-1", "avatar-gradient-2", "avatar-gradient-3", "avatar-gradient-4", "avatar-gradient-5"];
 
-type AuthUser = { id: number; username: string; display_name: string; avatar_gradient: number; bio: string };
-type FriendUser = { id: number; username: string; display_name: string; avatar_gradient: number; friendship_status?: string | null; online?: boolean };
-type ChatItem = { id: number; username: string; display_name: string; avatar_gradient: number; online: boolean; last_text: string; last_time: string; unread: number };
+type AuthUser = { id: number; username: string; display_name: string; avatar_gradient: number; bio: string; verified?: boolean };
+type FriendUser = { id: number; username: string; display_name: string; avatar_gradient: number; friendship_status?: string | null; online?: boolean; verified?: boolean };
+type ChatItem = { id: number; username: string; display_name: string; avatar_gradient: number; online: boolean; last_text: string; last_time: string; unread: number; verified?: boolean };
 type Message = { id: number; sender_id: number; text: string; time: string; out: boolean };
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
@@ -262,6 +262,15 @@ function TypingIndicator() {
       <div className="w-1.5 h-1.5 rounded-full bg-violet-400 typing-dot" />
       <div className="w-1.5 h-1.5 rounded-full bg-violet-400 typing-dot" />
     </div>
+  );
+}
+
+function VerifiedBadge() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="inline-block flex-shrink-0" style={{ verticalAlign: "middle" }}>
+      <circle cx="7" cy="7" r="7" fill="#1d9bf0" />
+      <path d="M4 7l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -569,6 +578,7 @@ export default function Index() {
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-sm text-foreground truncate flex items-center gap-1">
                           {chat.display_name}
+                          {chat.verified && <VerifiedBadge />}
                           <Icon name="Lock" size={9} className="text-emerald-400 flex-shrink-0" />
                         </span>
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">{chat.last_time}</span>
@@ -599,7 +609,7 @@ export default function Index() {
                           {u.display_name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-foreground">{u.display_name}</div>
+                          <div className="font-semibold text-sm text-foreground flex items-center gap-1">{u.display_name}{u.verified && <VerifiedBadge />}</div>
                           <div className="text-xs text-muted-foreground">@{u.username}</div>
                         </div>
                         <button
@@ -627,7 +637,7 @@ export default function Index() {
                           <OnlineBadge />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-foreground">{f.display_name}</div>
+                          <div className="font-semibold text-sm text-foreground flex items-center gap-1">{f.display_name}{f.verified && <VerifiedBadge />}</div>
                           <div className="text-xs text-violet-400">@{f.username}</div>
                         </div>
                         <button className="w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center text-violet-400 hover:bg-violet-500/30 transition-colors flex-shrink-0">
@@ -647,7 +657,7 @@ export default function Index() {
                           {f.display_name.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-foreground">{f.display_name}</div>
+                          <div className="font-semibold text-sm text-foreground flex items-center gap-1">{f.display_name}{f.verified && <VerifiedBadge />}</div>
                           <div className="text-xs text-muted-foreground">@{f.username}</div>
                         </div>
                         <button className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground hover:bg-white/10 transition-colors flex-shrink-0">
@@ -684,7 +694,10 @@ export default function Index() {
                   {currentUser.display_name.charAt(0)}
                 </div>
                 <div className="text-center">
-                  <div className="font-bold text-lg text-foreground">{currentUser.display_name}</div>
+                  <div className="font-bold text-lg text-foreground flex items-center justify-center gap-1.5">
+                    {currentUser.display_name}
+                    {currentUser.verified && <VerifiedBadge />}
+                  </div>
                   <div className="text-sm text-violet-400">@{currentUser.username}</div>
                 </div>
                 <div className="w-full space-y-2">
@@ -785,6 +798,7 @@ export default function Index() {
                 <div className="flex-1">
                   <div className="font-semibold text-foreground flex items-center gap-2">
                     {activeChat.display_name}
+                    {activeChat.verified && <VerifiedBadge />}
                     <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
                       <Icon name="Lock" size={9} /> E2E
                     </span>

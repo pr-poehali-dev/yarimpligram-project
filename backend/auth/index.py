@@ -75,7 +75,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"INSERT INTO {SCHEMA}.sessions (user_id, token) VALUES ({user_id}, '{token}')")
         conn.commit()
         conn.close()
-        return resp(200, {"token": token, "user": {"id": user_id, "username": username, "display_name": display_name, "avatar_gradient": gradient, "bio": ""}})
+        return resp(200, {"token": token, "user": {"id": user_id, "username": username, "display_name": display_name, "avatar_gradient": gradient, "bio": "", "verified": False}})
 
     # POST ?action=login
     if method == "POST" and action == "login":
@@ -88,19 +88,19 @@ def handler(event: dict, context) -> dict:
         ph = hash_password(password)
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(f"SELECT id, username, display_name, avatar_gradient, bio FROM {SCHEMA}.users WHERE username = '{safe_u}' AND password_hash = '{ph}'")
+        cur.execute(f"SELECT id, username, display_name, avatar_gradient, bio, verified FROM {SCHEMA}.users WHERE username = '{safe_u}' AND password_hash = '{ph}'")
         row = cur.fetchone()
         if not row:
             conn.close()
             return resp(401, {"error": "Неверный юзернейм или пароль"})
 
-        user_id, uname, dname, gradient, bio = row
+        user_id, uname, dname, gradient, bio, verified = row
         token = make_token()
         cur.execute(f"INSERT INTO {SCHEMA}.sessions (user_id, token) VALUES ({user_id}, '{token}')")
         cur.execute(f"UPDATE {SCHEMA}.users SET last_seen = NOW() WHERE id = {user_id}")
         conn.commit()
         conn.close()
-        return resp(200, {"token": token, "user": {"id": user_id, "username": uname, "display_name": dname, "avatar_gradient": gradient, "bio": bio or ""}})
+        return resp(200, {"token": token, "user": {"id": user_id, "username": uname, "display_name": dname, "avatar_gradient": gradient, "bio": bio or "", "verified": bool(verified)}})
 
     # GET ?action=me
     if method == "GET" and action == "me":
@@ -110,13 +110,13 @@ def handler(event: dict, context) -> dict:
         safe_t = token.replace("'", "''")
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(f"SELECT u.id, u.username, u.display_name, u.avatar_gradient, u.bio FROM {SCHEMA}.sessions s JOIN {SCHEMA}.users u ON u.id = s.user_id WHERE s.token = '{safe_t}' AND s.expires_at > NOW()")
+        cur.execute(f"SELECT u.id, u.username, u.display_name, u.avatar_gradient, u.bio, u.verified FROM {SCHEMA}.sessions s JOIN {SCHEMA}.users u ON u.id = s.user_id WHERE s.token = '{safe_t}' AND s.expires_at > NOW()")
         row = cur.fetchone()
         conn.close()
         if not row:
             return resp(401, {"error": "Сессия истекла"})
-        uid, uname, dname, gradient, bio = row
-        return resp(200, {"user": {"id": uid, "username": uname, "display_name": dname, "avatar_gradient": gradient, "bio": bio or ""}})
+        uid, uname, dname, gradient, bio, verified = row
+        return resp(200, {"user": {"id": uid, "username": uname, "display_name": dname, "avatar_gradient": gradient, "bio": bio or "", "verified": bool(verified)}})
 
     # POST ?action=logout
     if method == "POST" and action == "logout":
