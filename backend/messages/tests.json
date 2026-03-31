@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "name": "Chats unauthorized",
+      "method": "GET",
+      "path": "/?action=chats",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send unauthorized",
+      "method": "POST",
+      "path": "/?action=send",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

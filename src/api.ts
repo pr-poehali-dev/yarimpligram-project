@@ -1,5 +1,6 @@
 const AUTH_URL = "https://functions.poehali.dev/204c03d8-ac63-4424-b6f0-748161ebb2de";
 const FRIENDS_URL = "https://functions.poehali.dev/a5b5f71a-f854-4625-b70e-452472de38bf";
+const MESSAGES_URL = "https://functions.poehali.dev/03361af9-8c0b-4836-9c05-517e73fc86dd";
 
 function getToken(): string {
   return localStorage.getItem("yg_token") || "";
@@ -61,6 +62,25 @@ export async function apiFriendAccept(userId: number) {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({ user_id: userId }),
+  });
+  return r.json();
+}
+
+export async function apiChats() {
+  const r = await fetch(`${MESSAGES_URL}?action=chats`, { headers: authHeaders() });
+  return r.json();
+}
+
+export async function apiMessages(withUserId: number, offset = 0) {
+  const r = await fetch(`${MESSAGES_URL}?action=list&with_user_id=${withUserId}&offset=${offset}`, { headers: authHeaders() });
+  return r.json();
+}
+
+export async function apiSendMessage(receiverId: number, text: string) {
+  const r = await fetch(`${MESSAGES_URL}?action=send`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ receiver_id: receiverId, text }),
   });
   return r.json();
 }
